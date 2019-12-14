@@ -179,9 +179,8 @@ local function handle_drops(drops)
 end
 
 --- Iterator over positions to try to saw around a sawed node.
--- This returns positions in a 3x1x3 area around the position, plus the
--- position above it.  This does not return the bottom position to prevent
--- the chainsaw from cutting down nodes below the cutting position.
+-- This returns positions in a 3x1x3 area directly above the position
+-- to constrain sawing action to a single tree.
 -- @param pos Sawing position.
 local function iterSawTries(pos)
 	-- Copy position to prevent mangling it
@@ -199,8 +198,10 @@ local function iterSawTries(pos)
 		-- and the position above 5.
 		if i == 1 then
 			-- Move to starting position
+			-- We go straight up right away
 			pos.x = pos.x - 1
 			pos.z = pos.z - 1
+			pos.y = pos.y + 1
 		elseif i == 4 or i == 7 then
 			-- Move to next X and back to start of Z when we reach
 			-- the end of a Z line.
@@ -215,13 +216,9 @@ local function iterSawTries(pos)
 			-- Go to next Z.
 			pos.z = pos.z + 1
 		elseif i == 10 then
-			-- Move back to center and up.
-			-- The Y+ position must be last so that we don't dig
-			-- straight upward and not come down (since the Y-
-			-- position isn't checked).
+			-- Move back to center.
 			pos.x = pos.x - 1
 			pos.z = pos.z - 1
-			pos.y = pos.y + 1
 		else
 			return nil
 		end
@@ -295,7 +292,23 @@ end
 -- Chainsaw entry point
 local function chainsaw_dig(pos, current_charge)
 	-- Start sawing things down
-	local remaining_charge = recursive_dig(pos, current_charge)
+
+	-- The loops make the staring position effectively a 3x1x3 area in order to
+	-- not become too restrictive for practical usage
+	local remaining_charge = current_charge
+	local dpos_table = {0, -1, 1}
+	local original_pos = {x = pos.x, y = pos.y, z = pos.z}
+	local dpos = {x = 0, y = 0, z = 0}
+	for x = 1, 3 do
+		for z = 1, 3 do
+			dpos.x = original_pos.x + dpos_table[x]
+			dpos.y = original_pos.y
+			dpos.z = original_pos.z + dpos_table[z]
+			remaining_charge = recursive_dig(dpos, remaining_charge)
+			if (remaining_charge == 0) then break end;
+		end
+		if (remaining_charge == 0) then break end;
+	end
 	minetest.sound_play("chainsaw", {pos = pos, gain = 1.0,
 			max_hear_distance = 10})
 
